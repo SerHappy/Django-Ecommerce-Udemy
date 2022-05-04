@@ -2,6 +2,7 @@ from django.shortcuts import redirect, render, get_object_or_404
 from .models import Cart, CartItem
 from store.models import Product, Variation
 from django.db.models import Prefetch
+from django.contrib.auth.decorators import login_required
 
 
 def _cart_id(request):
@@ -95,7 +96,6 @@ def remove_cart(request, product_id, cart_item_id):
 
 
 def cart(request, total=0, grand_total=0, tax=0, quantity=0, cart_items=None):
-
     try:
         cart = Cart.objects.get(cart_id=_cart_id(request))
     except Cart.DoesNotExist:
@@ -135,3 +135,46 @@ def cart(request, total=0, grand_total=0, tax=0, quantity=0, cart_items=None):
         "grand_total": grand_total,
     }
     return render(request, "store/cart.html", context)
+
+
+@login_required(login_url="login")
+def checkout(request, total=0, grand_total=0, tax=0, quantity=0, cart_items=None):
+    try:
+        cart = Cart.objects.get(cart_id=_cart_id(request))
+    except Cart.DoesNotExist:
+        cart = Cart.objects.create(cart_id=_cart_id(request))
+    cart_items = (
+        CartItem.objects.select_related("product__category")
+        .prefetch_related(
+            Prefetch(
+                "variations",
+                queryset=Variation.objects.all().only(
+                    "variation_category", "variation_value"
+                ),
+            )
+        )
+        .filter(cart=cart, is_active=True)
+        .only(
+            "product__product_name",
+            "product__price",
+            "quantity",
+            "product__category__slug",
+            "product__images",
+            "product__slug",
+            "is_active",
+        )
+    )
+    for cart_item in cart_items:
+        total += cart_item.product.price * cart_item.quantity
+        quantity += cart_item.quantity
+    tax = (2 * total) / 100
+    grand_total = total + tax
+
+    context = {
+        "cart_items": cart_items,
+        "total": total,
+        "quantity": quantity,
+        "tax": tax,
+        "grand_total": grand_total,
+    }
+    return render(request, "accounts/checkout.html", context)

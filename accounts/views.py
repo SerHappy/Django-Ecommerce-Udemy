@@ -2,6 +2,8 @@ from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
 from accounts.models import Account
+from carts.models import Cart, CartItem
+from carts.views import _cart_id
 from .forms import RegistraitionForm
 from django.contrib import messages, auth
 from django.contrib.auth.decorators import login_required
@@ -71,6 +73,17 @@ def login(request):
         user = auth.authenticate(email=email, password=password)
 
         if user is not None:
+            try:
+                cart = Cart.objects.get(cart_id=_cart_id(request))
+                is_cart_item_exists = CartItem.objects.filter(cart=cart).exists()
+                if is_cart_item_exists:
+                    cart_items = CartItem.objects.filter(cart=cart)
+                    for item in cart_items:
+                        item.user = user
+                        item.save()
+
+            except:
+                pass
             auth.login(request, user)
             messages.success(request, "You are now logged in!")
             return redirect("dashboard")
@@ -140,5 +153,35 @@ def forgotPassword(request):
     return render(request, "accounts/forgotPassword.html")
 
 
-def resetPassword_validate(request):
-    return HttpResponse("ok")
+def resetPassword_validate(request, uidb64, token):
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = Account._default_manager.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, Account.DoesNotExist):
+        user = None
+    if user is not None and default_token_generator.check_token(user, token):
+        request.session["uid"] = uid
+        messages.success(request, "Please reset your password")
+        return redirect("resetPassword")
+    else:
+        messages.error(request, "This link is actually expired!")
+        return redirect("login")
+
+
+def resetPassword(request):
+    if request.method == "POST":
+        password = request.POST["password"]
+        confirm_password = request.POST["confirm_password"]
+
+        if password == confirm_password:
+            uid = request.session.get("uid")
+            user = Account.objects.get(pk=uid)
+            user.set_password(password)
+            user.save()
+            messages.success(request, "Password reset success")
+            return redirect("login")
+        else:
+            messages.error(request, "Password do not match")
+            return redirect("resetPassword")
+    else:
+        return render(request, "accounts/resetPassword.html")
