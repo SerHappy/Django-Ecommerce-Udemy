@@ -1,0 +1,7 @@
+from . import views
+from django.urls import include, path
+
+
+urlpatterns = [
+    path("place_order/", views.place_order, name="place_order"),
+]
