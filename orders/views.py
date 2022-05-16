@@ -86,6 +86,7 @@ def place_order(request, total=0, quantity=0, grand_total=0, tax=0):
 
 
 def payments(request):
+
     # body = json.loads(request.body)
     # order = Order.objects.get(
     #     user=request.user, is_ordered=False, order_number=body["orderID"]
@@ -98,10 +99,10 @@ def payments(request):
     #     status=body["status"],
     # )
     # payment.save()
-
     # order.payment = payment
     # order.is_ordered = True
     # order.save()
+
     latest_order = Order.objects.latest("id").order_number
     order = get_object_or_404(
         Order,
@@ -164,17 +165,31 @@ def payments(request):
         "order_number": order.order_number,
         "transactionID": payment.payment_id,
     }
-
-    # return JsonResponse(data)
-    url = (
-        f"%s?order_number={data['order_number']}&&payment_id={data['transactionID']}"
-        % reverse("order_complite")
+    return custom_redirect(
+        "order_complite",
+        order_number=data["order_number"],
+        transactionID=data["transactionID"],
     )
-    # return custom_redirect(
-    #     "order_complite",
-    #     q=f"order_number={data['order_number']}&payment_id={data['transactionID']}",
-    # )
 
 
 def order_complite(request):
-    return render(request, "orders/order_complite.html")
+    order_number = request.GET.get("order_number")
+    transactionID = request.GET.get("transactionID")
+    try:
+        order = Order.objects.get(order_number=order_number, is_ordered=True)
+        ordered_products = OrderProduct.objects.filter(order_id=order.id)
+
+        payment = Payment.objects.get(payment_id=transactionID)
+
+        sub_total = order.order_total - order.tax
+
+        context = {
+            "order": order,
+            "ordered_products": ordered_products,
+            "transactionID": payment.payment_id,
+            "payment": payment,
+            "sub_total": sub_total,
+        }
+        return render(request, "orders/order_complite.html", context)
+    except (Payment.DoesNotExist, Order.DoesNotExist):
+        return redirect("home")
