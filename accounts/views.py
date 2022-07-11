@@ -1,10 +1,9 @@
-import imp
-from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
 from accounts.models import Account
 from carts.models import Cart, CartItem
 from carts.views import _cart_id
+from orders.models import Order
 from .forms import RegistraitionForm
 from django.contrib import messages, auth
 from django.contrib.auth.decorators import login_required
@@ -17,6 +16,7 @@ from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMessage
 import requests
+
 
 def register(request):
     if request.user.is_authenticated:
@@ -53,7 +53,9 @@ def register(request):
                 },
             )
             to_email = email
-            send_email = EmailMessage(mail_subject, message, to=[to_email])
+            send_email = EmailMessage(
+                mail_subject, message, from_email="noreply@gmail.com", to=[to_email]
+            )
             send_email.send()
             # messages.success(request, "Check your email to complite registraition!")
             return redirect(f"/accounts/login/?command=verification&email={email}")
@@ -114,9 +116,9 @@ def login(request):
             url = request.META.get("HTTP_REFERER")
             try:
                 query = requests.utils.urlparse(url).query
-                params = dict(x.split('=') for x in query.split('&'))
-                if 'next' in params:
-                    nextPage = params['next']
+                params = dict(x.split("=") for x in query.split("&"))
+                if "next" in params:
+                    nextPage = params["next"]
                     return redirect(nextPage)
             except:
                 return redirect("dashboard")
@@ -152,7 +154,14 @@ def activate(request, uidb64, token):
 
 @login_required(login_url="login")
 def dashboard(request):
-    return render(request, "accounts/dashboard.html")
+    orders = Order.objects.order_by("-created_at").filter(
+        user_id=request.user.id, is_ordered=True
+    )
+    orders_count = orders.count()
+    ctx = {
+        "orders_count": orders_count,
+    }
+    return render(request, "accounts/dashboard.html", ctx)
 
 
 def forgotPassword(request):
@@ -172,7 +181,9 @@ def forgotPassword(request):
                 },
             )
             to_email = email
-            send_email = EmailMessage(mail_subject, message, to=[to_email])
+            send_email = EmailMessage(
+                mail_subject, message, from_email="noreply@gmail.com", to=[to_email]
+            )
             send_email.send()
 
             messages.success(
@@ -218,3 +229,17 @@ def resetPassword(request):
             return redirect("resetPassword")
     else:
         return render(request, "accounts/resetPassword.html")
+
+
+def my_orders(request):
+    orders = Order.objects.filter(user=request.user, is_ordered=True).order_by(
+        "-created_at"
+    )
+    ctx = {
+        "orders": orders,
+    }
+    return render(request, "accounts/my_orders.html", ctx)
+
+
+def edit_profile(request):
+    return render(request, "accounts/edit_profile.html")

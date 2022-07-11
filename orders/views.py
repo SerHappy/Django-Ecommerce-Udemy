@@ -158,7 +158,7 @@ def payments(request):
         },
     )
     to_email = request.user.email
-    send_email = EmailMessage(mail_subject, message, to=[to_email])
+    send_email = EmailMessage(mail_subject, message, from_email="noreply@gmail.com", to=[to_email])
     send_email.send()
 
     data = {
