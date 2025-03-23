@@ -1,2 +1,2 @@
-# Django-Ecommerce-Udemy
+# Django-Eccomerce
 Pet Project
